@@ -411,7 +411,12 @@ def generate_catalog(client, report_config, standard_fields, custom_fields, all_
     Generate a catalog entry for each report specified in `report_config`
     """
     catalog_entries = []
-    for report in PREMADE_REPORTS:
+    # for report in PREMADE_REPORTS:
+    for report in report_config:
+        # change to safe name for bigquery
+        temp = report['name'].replace(' ', '_').lower()
+        report['name'] = temp
+
         metrics_dimensions = set(report['metrics'] + report['dimensions'])
         selected_by_default = {*report['metrics'][:10], # Use first 10 metrics in definition
                                *report.get('default_dimensions', [])}
@@ -432,7 +437,8 @@ def generate_catalog(client, report_config, standard_fields, custom_fields, all_
                                             tap_stream_id=report['name'],
                                             metadata=metadata.to_list(mdata)))
 
-    for report in report_config:
+    # for report in report_config:
+    for report in []:
         schema, mdata = generate_catalog_entry(client,
                                                standard_fields,
                                                custom_fields,

@@ -3,14 +3,14 @@ from setuptools import setup
 
 setup(
     name="tap-google-analytics",
-    version="1.0.0",
+    version="1.0.0.dev",
     description="Singer.io tap for extracting data",
     author="Stitch",
     url="http://singer.io",
     classifiers=["Programming Language :: Python :: 3 :: Only"],
     py_modules=["tap_google_analytics"],
     install_requires=[
-        "singer-python==5.9.0",
+        "singer-python>=5.9.0",
         "requests==2.22.0",
         "backoff==1.8.0",
         "jwt==0.6.1"

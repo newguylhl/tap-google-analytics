@@ -92,7 +92,7 @@ def transform_datetimes(rec):
     """ Datetimes have a compressed format, so this ensures they parse correctly. """
     for field_name, value in rec.items():
         if value and field_name in DATETIME_FORMATS:
-            rec[field_name] = datetime.strptime(value, DATETIME_FORMATS[field_name]).strftime(singer.utils.DATETIME_FMT)
+            rec[field_name] = datetime.strptime(value, DATETIME_FORMATS[field_name]).strftime(singer.utils.DATETIME_FMT_SAFE)
     return rec
 
 def sync_report(client, schema, report, start_date, end_date, state, historically_syncing=False):
@@ -116,7 +116,11 @@ def sync_report(client, schema, report, start_date, end_date, state, historicall
                                                      report_date, report['metrics'],
                                                      report['dimensions']):
 
-            with singer.metrics.record_counter(report['name']) as counter:
+            endpoint = {
+                'name': report['name'],
+                'view_id': report['profile_id'],
+            }
+            with singer.metrics.record_counter(endpoint) as counter:
                 time_extracted = singer.utils.now()
                 with Transformer() as transformer:
                     for rec in report_to_records(raw_report_response):

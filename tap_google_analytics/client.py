@@ -345,7 +345,11 @@ class Client():
                       "dimensions": [{"name": d} for d in dimensions]}]}
             if nextPageToken:
                 body["reportRequests"][0]["pageToken"] = nextPageToken
-            with singer.metrics.http_request_timer(name):
+            endpoint = {
+                'name': name,
+                'view_id': profile_id,
+            }
+            with singer.metrics.http_request_timer(endpoint):
                 report_response = self.post("https://analyticsreporting.googleapis.com/v4/reports:batchGet", body)
             report = report_response.json()
 
