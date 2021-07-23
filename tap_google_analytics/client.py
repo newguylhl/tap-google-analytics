@@ -1,7 +1,7 @@
 from datetime import timedelta
 import json
+import pkgutil
 import math
-import os
 from jwt import (
     JWT,
     jwk_from_pem,
@@ -13,6 +13,7 @@ import backoff
 
 LOGGER = singer.get_logger()
 
+
 def is_retryable_403(response):
     """
     The Google Analytics Management API and Metadata API define three types of 403s that are retryable due to quota limits.
@@ -22,12 +23,43 @@ def is_retryable_403(response):
     https://developers.google.com/analytics/devguides/reporting/metadata/v3/errors
     """
     retryable_errors = {"userRateLimitExceeded", "rateLimitExceeded", "quotaExceeded"}
-    error_reasons = {error.get('reason') for error in response.json().get('error', {}).get('errors',[])}
+    error_reasons = get_error_reasons(response)
 
     if any(error_reasons.intersection(retryable_errors)):
         return True
 
     return False
+
+
+def get_error_reasons(response):
+    """
+    The google apis don't document the way the errors appear in their reponse json in the same way across different api endpoints and versions. This method defensively tries to grab the error reason(s) in all the ways response have shown to have them. Lastly if all those ways fail the error message just shows the full response json.
+    """
+    response_json = response.json()
+
+    error_reasons = set()
+    if 'error' in response_json:
+        error = response_json.get('error')
+        if isinstance(error, dict) and 'errors' in error:
+            errors = error.get('errors')
+            for sub_error in errors:
+                if 'reason' in sub_error:
+                    error_reasons.add(sub_error.get('reason'))
+                elif 'error_description' in sub_error:
+                    error_reasons.add(sub_error.get('error_description'))
+                else:
+                    error_reasons.add('reason or error_description missing from error, see full response {}'.format(response_json))
+        elif 'reason' in response_json:
+            error_reasons.add(response_json.get('reason'))
+        elif 'error_description' in response_json:
+            error_reasons.add(response_json.get('error_description'))
+        elif isinstance(error, str):
+            error_reasons.add(error)
+        else:
+            error_reasons.add('reason or error_description missing from error, see full response {}'.format(response_json))
+
+    return error_reasons
+
 
 def should_giveup(e):
     """
@@ -38,7 +70,8 @@ def should_giveup(e):
     """
     response = e.response
     if not _is_json(response):
-        # All of our retryable errors require a JSON response body
+        # Most retryable errors require a JSON response body
+        # If the response is not a json assume it's transient and should retry
         return False
 
     do_retry = should_retry(response)
@@ -53,7 +86,26 @@ def should_giveup(e):
     return not do_retry
 
 def should_retry(response):
-    return response.status_code == 429 or is_retryable_403(response)
+    """
+    Ensure certain status code responses trigger retries
+    See documentation at https://developers.google.com/analytics/devguides/reporting/core/v4/errors
+    """
+    if not _is_json(response):
+        # Most retryable errors require a JSON response body
+        # If the response is not a json assume it's transient and should retry
+        return True
+
+    response_error = response.json().get("error", {})
+
+    if isinstance(response_error, dict):
+        error_status_title = response_error.get("status", "")
+    else:
+        # Some responses put a string in the error instead, such as 401
+        error_status_title = ""
+
+    return (response.status_code == 429 or
+            is_retryable_403(response) or
+            (response.status_code == 503 and error_status_title == 'UNAVAILABLE'))
 
 def _is_json(response):
     try:
@@ -165,7 +217,7 @@ class Client():
                 "assertion": JWT().encode(message, signing_key, 'RS256')
             }
 
-        token_response = requests.post("https://oauth2.googleapis.com/token", data=payload)
+        token_response = self.session.post("https://oauth2.googleapis.com/token", json=payload)
 
         token_response.raise_for_status()
 
@@ -219,17 +271,8 @@ class Client():
         metadata_response = self.get("https://www.googleapis.com/analytics/v3/metadata/{reportType}/columns".format(reportType="ga"))
         return metadata_response.json()
 
-    def get_raw_cubes(self):
-        try:
-            cubes_response = self.get("https://ga-dev-tools.appspot.com/ga_cubes.json")
-            cubes_response.raise_for_status()
-            cubes_json = cubes_response.json()
-        except Exception as ex:
-            LOGGER.warning("Error fetching raw cubes, falling back to local copy. Exception message: %s", ex)
-            local_cubes_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "ga_cubes.json")
-            with open(local_cubes_path, "r") as f:
-                cubes_json = json.load(f)
-        return cubes_json
+    def get_raw_cubes(self): # pylint: disable=no-self-use
+        return json.loads(pkgutil.get_data(__package__, "ga_cubes.json").decode('utf-8'))
 
     def get_account_summaries_for_token(self):
         """

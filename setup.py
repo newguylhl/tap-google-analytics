@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name="tap-google-analytics",
-    version="1.0.0.dev",
+    version="1.0.5.dev",
     description="Singer.io tap for extracting data",
     author="Stitch",
     url="http://singer.io",
