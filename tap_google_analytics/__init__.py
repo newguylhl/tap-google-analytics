@@ -146,12 +146,12 @@ def main():
     required_config_keys = ['start_date']
     args = singer.parse_args(required_config_keys)
     validate_config_view_ids(args.config)
-    if "refresh_token" in args.config:  # if refresh_token in config assume OAuth2 credentials
-        args.config['auth_method'] = "oauth2"
+    if args.config['auth_method'] == "oauth2":
         additional_config_keys = ['client_id', 'client_secret', 'refresh_token']
-    else:  # otherwise, assume Service Account details should be present
-        args.config['auth_method'] = "service_account"
+    elif args.config['auth_method'] == "service_account":
         additional_config_keys = ['client_email', 'private_key']
+    else:
+        raise Exception('Unknown auth method: %s' % args.config['auth_method'])
 
     singer.utils.check_config(args.config, additional_config_keys)
 

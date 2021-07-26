@@ -411,9 +411,10 @@ def generate_catalog(client, report_config, standard_fields, custom_fields, all_
     Generate a catalog entry for each report specified in `report_config`
     """
     catalog_entries = []
+    # skip useless pre-defined schemas
     # for report in PREMADE_REPORTS:
     for report in report_config:
-        # change to safe name for bigquery
+        # change to safe name for BigQuery
         temp = report['name'].replace(' ', '_').lower()
         report['name'] = temp
 
